@@ -1,8 +1,9 @@
 import type React from "react"
-import type { Metadata } from "next"
+import type { Metadata, Viewport } from "next"
 import { Poppins } from "next/font/google"
 import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
+import { LanguageSelector } from "@/components/language-selector"
 
 const poppins = Poppins({
   subsets: ["latin"],
@@ -14,8 +15,11 @@ export const metadata: Metadata = {
   title: "Smart Bharat: AI-Powered Rural Assistant",
   description: "Voice-enabled assistant for rural users in India",
   manifest: "/manifest.json",
+  generator: 'v0.dev'
+}
+
+export const viewport: Viewport = {
   themeColor: "#FF7A00",
-    generator: 'v0.dev'
 }
 
 export default function RootLayout({
@@ -30,6 +34,9 @@ export default function RootLayout({
       </head>
       <body className={`${poppins.variable} font-sans`}>
         <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false} disableTransitionOnChange>
+          <div className="fixed top-4 right-4 z-50">
+            <LanguageSelector />
+          </div>
           {children}
         </ThemeProvider>
       </body>

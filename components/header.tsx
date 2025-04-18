@@ -8,7 +8,7 @@ export default function Header() {
         <div className="flex items-center gap-2">
           <div className="relative w-10 h-10">
             <Image
-              src="/placeholder.svg?height=40&width=40"
+              src="/placeholder.svg"
               alt="Smart Bharat Logo"
               width={40}
               height={40}

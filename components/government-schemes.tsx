@@ -21,7 +21,28 @@ const schemes = [
     title: "PM Awas Yojana",
     description: "Housing subsidy for rural families. New applications open until June 30.",
   },
-]
+  {
+    id: 4,
+    title: "Ujjwala Yojana",
+    description: "Free LPG connections for eligible women. Refill subsidy available.",
+  },
+  {
+    id: 5,
+    title: "Sukanya Samriddhi Yojana",
+    description: "Savings scheme for girl child with tax benefits and high interest rates.",
+  },
+  {
+    id: 6,
+    title: "Jan Dhan Yojana",
+    description: "Zero balance savings account with insurance and overdraft facilities.",
+  },
+  {
+    id: 7,
+    title: "Atal Pension Yojana",
+    description: "Monthly pension of up to Rs. 5,000 after 60 years for enrolled citizens.",
+  }
+];
+
 
 export default function GovernmentSchemes() {
   const [currentIndex, setCurrentIndex] = useState(0)
