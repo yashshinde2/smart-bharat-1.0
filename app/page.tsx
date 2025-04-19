@@ -6,7 +6,7 @@ import VoiceAssistant from "@/components/voice-assistant";
 import React, { useState } from "react";
 import axios from "axios";
 
-export default function HomePage() {
+export default function Page() {
   const [input, setInput] = useState('');
   const [response, setResponse] = useState('');
 
