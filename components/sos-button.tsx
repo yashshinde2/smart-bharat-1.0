@@ -33,7 +33,7 @@ interface SOSButtonProps {
   emergencyContacts?: EmergencyContact[]
   showMap?: boolean
   allowCustomContacts?: boolean
-  googleTranslateApiKey?: string
+  defaultEmergencyNumber?: string
 }
 
 // Define available languages
@@ -62,12 +62,21 @@ const languages = [
 
 export default function SOSButton({
   variant = "default",
-  label = "SOS",
+  label = "Emergency",
   icon = <AlertTriangle className="h-6 w-6" />,
   showMap = true,
   allowCustomContacts = true,
-  googleTranslateApiKey = "https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit",
+  defaultEmergencyNumber = "108", // Default to ambulance number
   emergencyContacts = [
+    // Medical first since it's the default
+    { 
+      name: "Ambulance", 
+      phone: "108", 
+      category: "medical", 
+      description: "Emergency medical transport",
+      alternativeNumbers: ["102"],
+      website: "https://health.gov.in"
+    },
     // Police
     { 
       name: "Police", 
@@ -86,14 +95,6 @@ export default function SOSButton({
     },
     
     // Medical
-    { 
-      name: "Ambulance", 
-      phone: "108", 
-      category: "medical", 
-      description: "Emergency medical transport",
-      alternativeNumbers: ["102"],
-      website: "https://health.gov.in"
-    },
     { 
       name: "COVID-19 Helpline", 
       phone: "1075", 
@@ -172,62 +173,15 @@ export default function SOSButton({
   const [selectedContact, setSelectedContact] = useState<EmergencyContact | null>(null)
   const [showContactOptions, setShowContactOptions] = useState(false)
   const [customMessage, setCustomMessage] = useState("")
-  const [showCustomContact, setShowCustomContact] = useState(false)
   const [customContact, setCustomContact] = useState<EmergencyContact>({
     name: "",
     phone: "",
     category: "other",
     description: ""
   })
-  const [selectedLanguage, setSelectedLanguage] = useState("en")
-  const [showLanguageSelector, setShowLanguageSelector] = useState(false)
-  const [translateElement, setTranslateElement] = useState<any>(null)
 
-  // Initialize Google Translate
-  useEffect(() => {
-    // Load Google Translate script
-    const script = document.createElement('script')
-    script.src = googleTranslateApiKey
-    script.async = true
-    script.defer = true
-    document.body.appendChild(script)
-
-    // Initialize Google Translate when script is loaded
-    script.onload = () => {
-      if (window.google && window.google.translate) {
-        const translateElement = new window.google.translate.TranslateElement(
-          {
-            pageLanguage: 'en',
-            includedLanguages: languages.map(lang => lang.code).join(','),
-            layout: window.google.translate.TranslateElement.InlineLayout.SIMPLE,
-            autoDisplay: false,
-            gaTrack: true,
-            gaId: 'e7e96c41e693450b9522e0abce83aa5d' // Set the provided API key
-          },
-          'google_translate_element'
-        )
-        setTranslateElement(translateElement)
-      }
-    }
-
-    return () => {
-      // Clean up script when component unmounts
-      document.body.removeChild(script)
-    }
-  }, [googleTranslateApiKey])
-
-  // Change language function
-  const changeLanguage = (languageCode: string) => {
-    setSelectedLanguage(languageCode)
-    setShowLanguageSelector(false)
-    
-    if (translateElement) {
-      const select = document.querySelector('.goog-te-combo') as HTMLSelectElement
-      if (select) {
-        select.value = languageCode
-        select.dispatchEvent(new Event('change'))
-      }
-    }
+  const handleDirectCall = () => {
+    window.location.href = `tel:${defaultEmergencyNumber}`;
   }
 
   const getLocation = async () => {
@@ -265,18 +219,19 @@ export default function SOSButton({
       
       const finalMessage = message || defaultMessage
 
-      window.location.href = `sms:${phone}?body=${encodeURIComponent(finalMessage)}`
+      // First make the emergency call
+      handleCall(phone);
+
+      // Then prepare the SMS
+      setTimeout(() => {
+        window.location.href = `sms:${phone}?body=${encodeURIComponent(finalMessage)}`
+      }, 100); // Small delay to ensure call is initiated first
     } catch (error) {
       console.error("SMS error:", error)
       setError("Failed to send SMS. Please try calling directly.")
     } finally {
       setIsLoading(false)
     }
-  }
-
-  const handleContactSelect = (contact: EmergencyContact) => {
-    setSelectedContact(contact)
-    setShowContactOptions(true)
   }
 
   const handleAddCustomContact = () => {
@@ -286,7 +241,7 @@ export default function SOSButton({
         description: customContact.description || `Custom emergency contact: ${customContact.name}`
       }
       emergencyContacts.push(newContact)
-      setShowCustomContact(false)
+      setShowContactOptions(false)
       setCustomContact({
         name: "",
         phone: "",
@@ -307,6 +262,17 @@ export default function SOSButton({
     }
   }
 
+  const getSMSButtonStyles = () => {
+    switch (variant) {
+      case "compact":
+        return "bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-full flex items-center gap-2 shadow-md"
+      case "floating":
+        return "bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-4 rounded-full flex items-center justify-center shadow-lg fixed bottom-6 right-6 z-50"
+      default:
+        return "bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-8 rounded-full flex items-center gap-2 shadow-lg"
+    }
+  }
+
   const categories = ["police", "medical", "fire", "women", "child", "other"]
   
   const filteredContacts = selectedCategory 
@@ -314,88 +280,61 @@ export default function SOSButton({
     : emergencyContacts
 
   return (
-    <>
-      <Button onClick={() => setShowEmergencyDialog(true)} className={getButtonStyles()}>
+    <div className="flex gap-2">
+      <Button
+        variant="destructive"
+        size={variant === "compact" ? "sm" : "default"}
+        className={getButtonStyles()}
+        onClick={handleDirectCall}
+        aria-label={`Call emergency at ${defaultEmergencyNumber}`}
+        title={`Call emergency at ${defaultEmergencyNumber}`}
+      >
         {icon}
-        {variant !== "floating" && <span>{label}</span>}
+        {variant !== "compact" && (
+          <span className="ml-2">
+            {label} ({defaultEmergencyNumber})
+          </span>
+        )}
       </Button>
 
-      {/* Language Selector Dialog */}
-      <Dialog open={showLanguageSelector} onOpenChange={setShowLanguageSelector}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Globe className="h-5 w-5" />
-              Select Language
-            </DialogTitle>
-            <DialogDescription>
-              Choose your preferred language for the emergency interface
-            </DialogDescription>
-          </DialogHeader>
+      <Button
+        variant="outline"
+        size={variant === "compact" ? "sm" : "default"}
+        className={getSMSButtonStyles()}
+        onClick={() => setShowEmergencyDialog(true)}
+        title="View all emergency options"
+      >
+        <MessageSquare className="h-6 w-6" />
+        {variant !== "compact" && <span className="ml-2">More Options</span>}
+      </Button>
 
-          <div className="grid grid-cols-2 gap-2 py-4">
-            {languages.map((language) => (
-              <Button
-                key={language.code}
-                variant={selectedLanguage === language.code ? "default" : "outline"}
-                className="justify-start"
-                onClick={() => changeLanguage(language.code)}
-              >
-                {language.name}
-              </Button>
-            ))}
-          </div>
-
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setShowLanguageSelector(false)}
-            >
-              Close
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Main Emergency Dialog */}
+      {/* Emergency Dialog */}
       <Dialog open={showEmergencyDialog} onOpenChange={setShowEmergencyDialog}>
         <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
-            <div className="flex justify-between items-center">
-              <DialogTitle className="text-red-600 flex items-center gap-2">
-                <AlertTriangle className="h-5 w-5" />
-                Emergency Services
-              </DialogTitle>
-              <Button 
-                variant="outline" 
-                size="icon"
-                onClick={() => setShowLanguageSelector(true)}
-                className="rounded-full"
-              >
-                <Globe className="h-4 w-4" />
-              </Button>
-            </div>
+            <DialogTitle className="text-red-600 flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5" />
+              Emergency Services
+            </DialogTitle>
             <DialogDescription>
               Select a service to contact emergency responders
               {location && (
                 <div className="mt-2 text-sm text-green-600 flex items-center gap-1">
-                  <MapPin className="h-4 w-4" />
+                  <span className="h-4 w-4">📍</span>
                   Location will be included in SMS
                 </div>
               )}
             </DialogDescription>
           </DialogHeader>
 
-          {/* Google Translate Element */}
-          <div id="google_translate_element" className="mb-4"></div>
-
           {error && (
             <div className="bg-red-100 text-red-700 p-2 rounded text-sm mb-3">{error}</div>
           )}
 
-          <Tabs defaultValue="services" className="w-full">
-            <TabsList className="grid grid-cols-2 mb-4">
+          <Tabs defaultValue={selectedCategory || "services"} className="w-full">
+            <TabsList className="grid grid-cols-3 mb-4">
               <TabsTrigger value="services">Emergency Services</TabsTrigger>
+              <TabsTrigger value="sms">Quick SMS</TabsTrigger>
               {allowCustomContacts && (
                 <TabsTrigger value="custom">Add Custom Contact</TabsTrigger>
               )}
@@ -425,11 +364,17 @@ export default function SOSButton({
 
               {/* Emergency Contacts List */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {filteredContacts.map((contact, index) => (
+                {(selectedCategory 
+                  ? emergencyContacts.filter(contact => contact.category === selectedCategory)
+                  : emergencyContacts
+                ).map((contact, index) => (
                   <div 
                     key={index} 
                     className="border rounded-lg p-3 hover:bg-gray-50 transition-colors cursor-pointer"
-                    onClick={() => handleContactSelect(contact)}
+                    onClick={() => {
+                      setSelectedContact(contact);
+                      setShowContactOptions(true);
+                    }}
                   >
                     <div className="flex justify-between items-start">
                       <div>
@@ -452,23 +397,117 @@ export default function SOSButton({
                           <Phone className="h-4 w-4 mr-1" />
                           Call
                         </Button>
-                        <Button 
-                          size="sm" 
-                          variant="outline" 
-                          className="text-blue-600 border-blue-600 hover:bg-blue-50"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleSendSMS(contact.phone);
-                          }}
-                          disabled={isLoading}
-                        >
-                          <MessageSquare className="h-4 w-4 mr-1" />
-                          {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "SMS"}
-                        </Button>
+                        {contact.category !== "medical" && (
+                          <Button 
+                            size="sm" 
+                            variant="outline" 
+                            className="text-blue-600 border-blue-600 hover:bg-blue-50"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleSendSMS(contact.phone);
+                            }}
+                            disabled={isLoading}
+                          >
+                            <MessageSquare className="h-4 w-4 mr-1" />
+                            {isLoading ? "Loading..." : "SMS"}
+                          </Button>
+                        )}
                       </div>
                     </div>
                   </div>
                 ))}
+              </div>
+            </TabsContent>
+
+            <TabsContent value="sms">
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="contact">Select Emergency Contact</Label>
+                  <select 
+                    id="contact"
+                    className="w-full p-2 border rounded-md"
+                    onChange={(e) => {
+                      const contact = emergencyContacts.find(c => c.phone === e.target.value);
+                      if (contact) setSelectedContact(contact);
+                    }}
+                  >
+                    <option value="">Select a contact</option>
+                    {emergencyContacts
+                      .filter(contact => contact.category !== "medical")
+                      .map((contact, index) => (
+                        <option key={index} value={contact.phone}>
+                          {contact.name} ({contact.phone})
+                        </option>
+                      ))
+                    }
+                  </select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="message">Custom Message (Optional)</Label>
+                  <Textarea 
+                    id="message"
+                    placeholder="Add your emergency message here..."
+                    value={customMessage}
+                    onChange={(e) => setCustomMessage(e.target.value)}
+                    className="h-32"
+                  />
+                </div>
+
+                {showMap && (
+                  <div className="space-y-2">
+                    <Label className="flex items-center gap-2">
+                      <MapPin className="h-4 w-4" />
+                      Location
+                    </Label>
+                    {location ? (
+                      <div className="bg-gray-100 p-3 rounded-lg flex items-center justify-between">
+                        <span className="text-sm">
+                          {location.latitude.toFixed(6)}, {location.longitude.toFixed(6)}
+                        </span>
+                        <Button 
+                          size="sm" 
+                          variant="outline"
+                          onClick={() => window.open(`https://www.google.com/maps?q=${location.latitude},${location.longitude}`, '_blank')}
+                        >
+                          View Map
+                        </Button>
+                      </div>
+                    ) : (
+                      <Button 
+                        variant="outline" 
+                        className="w-full"
+                        onClick={getLocation}
+                        disabled={isLoading}
+                      >
+                        {isLoading ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            Getting location...
+                          </>
+                        ) : (
+                          <>
+                            <MapPin className="h-4 w-4 mr-2" />
+                            Get Location
+                          </>
+                        )}
+                      </Button>
+                    )}
+                  </div>
+                )}
+
+                <Button 
+                  className="w-full"
+                  onClick={() => {
+                    if (selectedContact) {
+                      handleSendSMS(selectedContact.phone, customMessage);
+                    }
+                  }}
+                  disabled={!selectedContact || isLoading}
+                >
+                  <MessageSquare className="h-4 w-4 mr-2" />
+                  Send Emergency SMS
+                </Button>
               </div>
             </TabsContent>
             
@@ -537,9 +576,11 @@ export default function SOSButton({
             <Button
               variant="outline"
               onClick={() => {
-                setShowEmergencyDialog(false)
-                setError(null)
-                setSelectedCategory(null)
+                setShowEmergencyDialog(false);
+                setError(null);
+                setSelectedCategory(null);
+                setSelectedContact(null);
+                setCustomMessage("");
               }}
             >
               Close
@@ -573,39 +614,26 @@ export default function SOSButton({
 
             <div className="space-y-4 py-4">
               <div className="bg-gray-50 p-4 rounded-lg">
-                <p className="text-sm text-gray-500">Primary Number</p>
+                <p className="text-sm text-gray-500">Primary Contact</p>
                 <p className="text-xl font-bold">{selectedContact.phone}</p>
-              </div>
-
-              {selectedContact.alternativeNumbers && selectedContact.alternativeNumbers.length > 0 && (
-                <div>
-                  <h4 className="text-sm font-medium mb-2">Alternative Numbers</h4>
-                  <div className="space-y-2">
+                {selectedContact.alternativeNumbers && selectedContact.alternativeNumbers.length > 0 && (
+                  <div className="mt-2">
+                    <p className="text-sm text-gray-500">Alternative Numbers</p>
                     {selectedContact.alternativeNumbers.map((number, index) => (
-                      <div key={index} className="flex justify-between items-center">
-                        <span>{number}</span>
-                        <Button 
-                          size="sm" 
-                          variant="outline"
-                          onClick={() => handleCall(number)}
-                        >
-                          <Phone className="h-4 w-4 mr-1" />
-                          Call
-                        </Button>
-                      </div>
+                      <p key={index} className="text-sm">{number}</p>
                     ))}
                   </div>
-                </div>
-              )}
+                )}
+              </div>
 
               {selectedContact.website && (
-                <div>
-                  <h4 className="text-sm font-medium mb-2">Website</h4>
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <p className="text-sm text-gray-500">Website</p>
                   <a 
                     href={selectedContact.website} 
                     target="_blank" 
                     rel="noopener noreferrer"
-                    className="text-blue-600 hover:underline text-sm"
+                    className="text-blue-600 hover:underline"
                   >
                     {selectedContact.website}
                   </a>
@@ -630,15 +658,16 @@ export default function SOSButton({
                   <Phone className="h-4 w-4 mr-2" />
                   Call Now
                 </Button>
-                <Button 
-                  className="bg-blue-600 hover:bg-blue-700"
-                  onClick={() => handleSendSMS(selectedContact.phone, customMessage)}
-                  disabled={isLoading}
-                >
-                  <MessageSquare className="h-4 w-4 mr-2" />
-                  {isLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                  Send SMS
-                </Button>
+                {selectedContact.category !== "medical" && (
+                  <Button 
+                    className="bg-blue-600 hover:bg-blue-700"
+                    onClick={() => handleSendSMS(selectedContact.phone, customMessage)}
+                    disabled={isLoading}
+                  >
+                    <MessageSquare className="h-4 w-4 mr-2" />
+                    {isLoading ? "Loading..." : "Send SMS"}
+                  </Button>
+                )}
               </div>
 
               {showMap && location && (
@@ -668,8 +697,8 @@ export default function SOSButton({
               <Button
                 variant="outline"
                 onClick={() => {
-                  setShowContactOptions(false)
-                  setCustomMessage("")
+                  setShowContactOptions(false);
+                  setCustomMessage("");
                 }}
               >
                 Close
@@ -678,6 +707,6 @@ export default function SOSButton({
           </DialogContent>
         </Dialog>
       )}
-    </>
+    </div>
   )
 }

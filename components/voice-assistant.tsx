@@ -3,7 +3,6 @@
 import { useState, useRef, useEffect } from "react";
 import { Mic, MicOff, Volume2, VolumeX, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { useMobile } from "@/hooks/use-mobile";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
@@ -28,11 +27,12 @@ export default function VoiceAssistant() {
   const isMobile = useMobile();
 
   const recognitionRef = useRef<SpeechRecognition | null>(null);
-  const apiKey = process.env.NEXT_PUBLIC_API_KEY!;
+  const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY!;
 
-  // Check if we're using HTTPS or localhost
-  const isSecureContext = typeof window !== 'undefined' && 
-    (window.location.protocol === 'https:' || window.location.hostname === 'localhost');
+  const isSecureContext =
+    typeof window !== "undefined" &&
+    (window.location.protocol === "https:" ||
+      window.location.hostname === "localhost");
 
   const requestMicrophonePermission = async () => {
     if (typeof window === "undefined") return;
@@ -41,31 +41,34 @@ export default function VoiceAssistant() {
       setShowHttpsWarning(true);
       setMessages((prev) => [
         ...prev,
-        { 
-          id: Date.now().toString(), 
-          text: "माइक्रोफ़ोन एक्सेस के लिए HTTPS की आवश्यकता है। (HTTPS is required for microphone access.)", 
-          isUser: false 
+        {
+          id: Date.now().toString(),
+          text: "माइक्रोफ़ोन एक्सेस के लिए HTTPS की आवश्यकता है। (HTTPS is required for microphone access.)",
+          isUser: false,
         },
       ]);
       return;
     }
 
     try {
-      if (!window.navigator?.mediaDevices?.getUserMedia) {
+      if (!navigator.mediaDevices?.getUserMedia) {
         throw new Error("MediaDevices API not supported");
       }
 
-      const stream = await window.navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       stream.getTracks().forEach((track) => track.stop());
       console.log("Microphone access granted.");
     } catch (err: any) {
       console.error("Microphone access error:", err);
-      let errorMessage = "माइक्रोफ़ोन एक्सेस की अनुमति नहीं मिली। कृपया अपने ब्राउज़र सेटिंग्स में जाकर माइक्रोफ़ोन की अनुमति दें।";
+      let errorMessage =
+        "माइक्रोफ़ोन एक्सेस की अनुमति नहीं मिली। कृपया अपने ब्राउज़र सेटिंग्स में जाकर माइक्रोफ़ोन की अनुमति दें।";
 
       if (err.message === "MediaDevices API not supported") {
-        errorMessage = "आपका ब्राउज़र माइक्रोफ़ोन का समर्थन नहीं करता है। कृपया Chrome का उपयोग करें।";
+        errorMessage =
+          "आपका ब्राउज़र माइक्रोफ़ोन का समर्थन नहीं करता है। कृपया Chrome का उपयोग करें।";
       } else if (err.name === "NotAllowedError") {
-        errorMessage = "माइक्रोफ़ोन एक्सेस की अनुमति नहीं मिली। कृपया अपने ब्राउज़र सेटिंग्स में जाकर माइक्रोफ़ोन की अनुमति दें।";
+        errorMessage =
+          "माइक्रोफ़ोन एक्सेस की अनुमति नहीं मिली। कृपया अपने ब्राउज़र सेटिंग्स में जाकर माइक्रोफ़ोन की अनुमति दें।";
       } else if (err.name === "NotFoundError") {
         errorMessage = "कोई माइक्रोफ़ोन नहीं मिला। कृपया एक माइक्रोफ़ोन कनेक्ट करें।";
       }
@@ -80,13 +83,13 @@ export default function VoiceAssistant() {
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost') {
+    if (!isSecureContext) {
       setMessages((prev) => [
         ...prev,
-        { 
-          id: Date.now().toString(), 
-          text: "वॉइस रिकग्निशन के लिए HTTPS की आवश्यकता है। (HTTPS is required for voice recognition.)", 
-          isUser: false 
+        {
+          id: Date.now().toString(),
+          text: "वॉइस रिकग्निशन के लिए HTTPS की आवश्यकता है। (HTTPS is required for voice recognition.)",
+          isUser: false,
         },
       ]);
       return;
@@ -115,10 +118,6 @@ export default function VoiceAssistant() {
     recognition.continuous = false;
     recognition.interimResults = true;
     recognition.maxAlternatives = 1;
-
-    recognition.onstart = () => {
-      console.log("Speech recognition started");
-    };
 
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
       console.error("Speech recognition error:", event.error);
@@ -158,6 +157,7 @@ export default function VoiceAssistant() {
     if (voiceOutput && messages.length > 0) {
       const last = messages[messages.length - 1];
       if (!last.isUser) {
+        speechSynthesis.cancel(); // cancel previous speech
         const utterance = new SpeechSynthesisUtterance(last.text);
         utterance.lang = "hi-IN";
         speechSynthesis.speak(utterance);
@@ -166,37 +166,49 @@ export default function VoiceAssistant() {
   }, [messages, voiceOutput]);
 
   const callGenerativeAI = async (text: string) => {
+    const loadingId = `loading-${Date.now()}`;
+    setMessages((prev) => [
+      ...prev,
+      { id: loadingId, text: "सोच रहा हूँ...", isUser: false },
+    ]);
+
     try {
-      const endpoint = `https://generativelanguage.googleapis.com/v1beta3/models/chat-bison-001:generateMessage?key=${apiKey}`;
+      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`;
       const response = await fetch(endpoint, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          prompt: {
-            messages: [{ author: "user", content: text }],
-          },
+          contents: [{
+            parts: [{
+              text: text
+            }]
+          }]
         }),
       });
 
-      const data = await response.json();
-      const aiReply =
-        data.candidates?.[0]?.content || "माफ़ करें, मैं आपकी मदद नहीं कर सका।";
+      if (!response.ok) {
+        throw new Error(`API request failed with status ${response.status}`);
+      }
 
-      setMessages((prev) => [
-        ...prev,
-        { id: Date.now().toString(), text: aiReply, isUser: false },
-      ]);
+      const data = await response.json();
+      const aiReply = data.candidates?.[0]?.content?.parts?.[0]?.text || "माफ़ करें, मैं आपकी मदद नहीं कर सका।";
+
+      setMessages((prev) =>
+        prev
+          .filter((msg) => msg.id !== loadingId)
+          .concat({ id: Date.now().toString(), text: aiReply, isUser: false })
+      );
     } catch (err) {
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: Date.now().toString(),
-          text: "कुछ गलत हो गया। कृपया पुनः प्रयास करें।",
-          isUser: false,
-        },
-      ]);
+      console.error("AI API Error:", err);
+      setMessages((prev) =>
+        prev
+          .filter((msg) => msg.id !== loadingId)
+          .concat({
+            id: Date.now().toString(),
+            text: "कुछ गलत हो गया। कृपया पुनः प्रयास करें।",
+            isUser: false,
+          })
+      );
     } finally {
       setIsListening(false);
     }
@@ -205,9 +217,7 @@ export default function VoiceAssistant() {
   const toggleListening = () => {
     const recognition = recognitionRef.current;
     if (!recognition) {
-      alert(
-        "Speech recognition उपलब्ध नहीं है। कृपया Google Chrome का उपयोग करें।"
-      );
+      alert("Speech recognition उपलब्ध नहीं है। कृपया Google Chrome का उपयोग करें।");
       return;
     }
 
@@ -215,22 +225,24 @@ export default function VoiceAssistant() {
       setIsListening(true);
       try {
         recognition.start();
-
         recognition.onresult = (event: SpeechRecognitionEvent) => {
           const last = event.results.length - 1;
-          const userText = event.results[last][0].transcript;
-          console.log("Recognized text:", userText);
+          const result = event.results[last];
+          const transcript = result[0].transcript;
 
-          setMessages((prev) => [
-            ...prev,
-            { id: Date.now().toString(), text: userText, isUser: true },
-          ]);
-          callGenerativeAI(userText);
+          if (result.isFinal && transcript.trim()) {
+            console.log("Recognized:", transcript);
+            setMessages((prev) => [
+              ...prev,
+              { id: Date.now().toString(), text: transcript, isUser: true },
+            ]);
+            callGenerativeAI(transcript);
+          }
         };
       } catch (error) {
-        console.error("Error starting speech recognition:", error);
-        setIsListening(false);
+        console.error("Speech start error:", error);
         alert("Speech recognition शुरू करने में त्रुटि हुई। कृपया पुनः प्रयास करें।");
+        setIsListening(false);
       }
     } else {
       recognition.stop();
@@ -247,14 +259,17 @@ export default function VoiceAssistant() {
           <AlertTriangle className="h-4 w-4" />
           <AlertTitle>HTTPS Required</AlertTitle>
           <AlertDescription>
-            Voice recognition requires a secure connection (HTTPS). Please run the application with HTTPS enabled.
+            Voice recognition requires a secure connection (HTTPS). Please run
+            the application with HTTPS enabled.
             <div className="mt-2 text-sm">
-              <a href="/HTTPS_SETUP.md" className="underline">View setup instructions</a>
+              <a href="/HTTPS_SETUP.md" className="underline">
+                View setup instructions
+              </a>
             </div>
           </AlertDescription>
         </Alert>
       )}
-      
+
       <div className="flex-1 overflow-y-auto mb-4 space-y-4">
         {messages.map((message) => (
           <div
@@ -268,7 +283,7 @@ export default function VoiceAssistant() {
                 message.isUser
                   ? "bg-brand-orange text-white"
                   : "bg-gray-100 text-gray-800"
-              } slide-in`}
+              }`}
             >
               <p className="text-sm sm:text-base">{message.text}</p>
             </div>
@@ -278,7 +293,7 @@ export default function VoiceAssistant() {
       </div>
 
       {isListening && (
-        <div className="flex justify-center mb-6 fade-in">
+        <div className="flex justify-center mb-6">
           <div className="flex space-x-1">
             {[...Array(5)].map((_, i) => (
               <div
@@ -314,7 +329,7 @@ export default function VoiceAssistant() {
             isListening
               ? "bg-red-500 hover:bg-red-600"
               : "bg-brand-orange hover:bg-brand-orange/90"
-          } pulse-animation flex items-center justify-center`}
+          } flex items-center justify-center`}
           disabled={!isSecureContext}
         >
           {isListening ? (

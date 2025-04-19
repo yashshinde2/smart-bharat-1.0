@@ -3,7 +3,7 @@ export {};
 
 declare global {
   interface Window {
-    google: {
+    google?: {
       translate: {
         TranslateElement: new (
           options: {
@@ -21,9 +21,17 @@ declare global {
         };
       };
     };
-    googleTranslateElementInit: () => void;
+    googleTranslateElementInit?: () => void;
+
+    // DeepSeek API typings
+    deepseek?: {
+      chat: (options: { prompt: string }) => Promise<string>;
+      // Add more DeepSeek methods/properties as needed
+    };
   }
 
-  // Make sure the `google` variable matches window.google
+  // Define google globally once
   var google: typeof window.google;
+  // Define deepseek globally once
+  var deepseek: typeof window.deepseek;
 }

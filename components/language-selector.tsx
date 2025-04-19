@@ -49,92 +49,69 @@ export function LanguageSelector() {
 
       // Parse the response body once
       const data = await response.json();
-      console.log(`Translation API response status: ${response.status}`, data);
-
+      
       if (!response.ok) {
-        // Handle empty error objects
-        if (Object.keys(data).length === 0) {
-          console.error("Empty error response from translation API");
-          throw new Error(`Translation failed with status ${response.status}`);
-        }
-        
-        throw new Error(data.error || `Translation failed with status ${response.status}`);
+        throw new Error(data.error || 'Translation failed');
       }
-
-      // Check if the response has the expected structure
-      if (!data.translatedText) {
-        console.error("Invalid translation response format:", data);
-        throw new Error("Invalid translation response format");
-      }
-
-      return data.translatedText;
+      
+      return data as TranslationResponse;
     } catch (error) {
       console.error('Translation error:', error);
-      setTranslationError(error instanceof Error ? error.message : 'Translation failed');
-      return text; // Return original text if translation fails
+      throw error;
     }
-  };
+  }
 
   // Function to translate the entire page
   const translatePage = async (targetLang: string) => {
-    setIsTranslating(true);
-    setTranslationError(null);
-    
     try {
-      // Get all text nodes in the document
-      const textNodes = document.evaluate(
-        "//text()[not(ancestor::script) and not(ancestor::style) and not(ancestor::textarea) and not(ancestor::input)]",
-        document.body,
-        null,
-        XPathResult.UNORDERED_NODE_SNAPSHOT_TYPE,
-        null
-      );
+      setIsTranslating(true);
+      setTranslationError(null);
+      
+      // Get all text nodes from the page
+      const textNodes = Array.from(document.querySelectorAll('h1, h2, h3, h4, h5, h6, p, span, div, li, button, a, label, input[placeholder], textarea[placeholder]'))
+        .filter(node => {
+          // Filter out nodes that are hidden or empty
+          const style = window.getComputedStyle(node);
+          return style.display !== 'none' && 
+                 style.visibility !== 'hidden' && 
+                 node.textContent?.trim() !== '';
+        })
+        .map(node => ({
+          node,
+          text: node.textContent?.trim() || ''
+        }))
+        .filter(item => item.text.length > 0);
+      
+      console.log(`Found ${textNodes.length} text nodes to translate`);
       
       // Translate each text node
-      let translatedCount = 0;
-      const totalNodes = textNodes.snapshotLength;
-      
-      console.log(`Found ${totalNodes} text nodes to translate`);
-      
-      for (let i = 0; i < totalNodes; i++) {
-        const node = textNodes.snapshotItem(i);
-        if (node && node.nodeValue && node.nodeValue.trim()) {
-          const originalText = node.nodeValue.trim();
-          
-          // Skip very short texts or numbers
-          if (originalText.length < 2 || /^\d+$/.test(originalText)) {
-            continue;
+      for (const item of textNodes) {
+        try {
+          const result = await translateText(item.text, targetLang);
+          if (result && result.translatedText) {
+            item.node.textContent = result.translatedText;
           }
-          
-          const translatedText = await translateText(originalText, targetLang);
-          
-          // Only update if translation was successful
-          if (translatedText && translatedText !== originalText) {
-            node.nodeValue = translatedText;
-            translatedCount++;
-          }
+        } catch (error) {
+          console.error(`Failed to translate node: "${item.text.substring(0, 50)}${item.text.length > 50 ? '...' : ''}"`, error);
         }
       }
       
-      console.log(`Translated ${translatedCount} of ${totalNodes} text nodes`);
-      
-      // Store the selected language in localStorage
-      localStorage.setItem('selectedLanguage', targetLang);
-      
+      console.log('Page translation completed');
     } catch (error) {
       console.error('Page translation error:', error);
-      setTranslationError('Failed to translate the page');
+      setTranslationError('Failed to translate the page. Please try again.');
     } finally {
       setIsTranslating(false);
     }
-  };
+  }
 
+  // Handle language selection
   const handleLanguageSelect = async (language: typeof languages[0]) => {
-    if (isTranslating) return;
+    if (language.code === selectedLanguage.code) return;
     
     setSelectedLanguage(language);
     await translatePage(language.code);
-  };
+  }
 
   // Initialize language from localStorage on component mount
   useEffect(() => {
