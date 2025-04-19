@@ -34,7 +34,7 @@ export class GeminiAPI {
 
   constructor(config: GeminiConfig) {
     this.apiKey = config.apiKey;
-    this.model = config.model || 'gemini-pro';
+    this.model = config.model || 'gemini-1.5-flash'; // Default model
     this.baseUrl = 'https://generativelanguage.googleapis.com/v1beta/models';
   }
 

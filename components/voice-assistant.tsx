@@ -330,7 +330,7 @@ export default function VoiceAssistant() {
               ? "bg-red-500 hover:bg-red-600"
               : "bg-brand-orange hover:bg-brand-orange/90"
           } flex items-center justify-center`}
-          disabled={!isSecureContext}
+          disabled={false}
         >
           {isListening ? (
             <MicOff className="h-10 w-10" />
