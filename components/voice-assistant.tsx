@@ -28,6 +28,7 @@ export default function VoiceAssistant() {
 
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY!;
+  const apiUrl = process.env.NEXT_PUBLIC_GEMINI_API_URL;
 
   const isSecureContext =
     typeof window !== "undefined" &&
@@ -157,7 +158,7 @@ export default function VoiceAssistant() {
     if (voiceOutput && messages.length > 0) {
       const last = messages[messages.length - 1];
       if (!last.isUser) {
-        speechSynthesis.cancel(); // cancel previous speech
+        speechSynthesis.cancel();
         const utterance = new SpeechSynthesisUtterance(last.text);
         utterance.lang = "hi-IN";
         speechSynthesis.speak(utterance);
@@ -173,25 +174,30 @@ export default function VoiceAssistant() {
     ]);
 
     try {
-      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`;
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{
-            parts: [{
-              text: text
-            }]
-          }]
-        }),
-      });
+      console.log("Sending to Gemini:", text);
 
-      if (!response.ok) {
-        throw new Error(`API request failed with status ${response.status}`);
-      }
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [
+              {
+                parts: [{ text }],
+              },
+            ],
+          }),
+        }
+      );
 
       const data = await response.json();
-      const aiReply = data.candidates?.[0]?.content?.parts?.[0]?.text || "माफ़ करें, मैं आपकी मदद नहीं कर सका।";
+      console.log("Gemini API response:", data);
+
+      const aiReply =
+        data?.candidates?.[0]?.content?.parts?.[0]?.text ||
+        data?.candidates?.[0]?.content?.text ||
+        "माफ़ करें, मैं आपकी मदद नहीं कर सका।";
 
       setMessages((prev) =>
         prev
@@ -230,8 +236,9 @@ export default function VoiceAssistant() {
           const result = event.results[last];
           const transcript = result[0].transcript;
 
+          console.log("Recognized:", transcript);
+
           if (result.isFinal && transcript.trim()) {
-            console.log("Recognized:", transcript);
             setMessages((prev) => [
               ...prev,
               { id: Date.now().toString(), text: transcript, isUser: true },
