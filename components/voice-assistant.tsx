@@ -5,6 +5,7 @@ import { Mic, MicOff, Volume2, VolumeX, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useMobile } from "@/hooks/use-mobile";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { geminiAPI } from "@/app/utils/gemini";
 
 interface Message {
   id: string;
@@ -167,56 +168,66 @@ export default function VoiceAssistant() {
   }, [messages, voiceOutput]);
 
   const callGenerativeAI = async (text: string) => {
-    const loadingId = `loading-${Date.now()}`;
-    setMessages((prev) => [
-      ...prev,
-      { id: loadingId, text: "सोच रहा हूँ...", isUser: false },
-    ]);
-
     try {
-      console.log("Sending to Gemini:", text);
+      console.log("Calling Gemini API with text:", text);
+      
+      const result = await geminiAPI.generateContent(text);
+      
+      if (result.error) {
+        console.error("Gemini API error:", result.error);
+        throw new Error(result.error);
+      }
+      
+      if (!result.response) {
+        throw new Error("No response generated");
+      }
+      
+      console.log("Gemini API response:", result.response);
+      return result.response;
+    } catch (error) {
+      console.error("Error calling Gemini API:", error);
+      throw error;
+    }
+  };
 
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            contents: [
-              {
-                parts: [{ text }],
-              },
-            ],
-          }),
-        }
-      );
+  const handleSpeechResult = async (event: SpeechRecognitionEvent) => {
+    const transcript = event.results[event.results.length - 1][0].transcript;
+    console.log("Transcript:", transcript);
 
-      const data = await response.json();
-      console.log("Gemini API response:", data);
+    if (event.results[event.results.length - 1].isFinal) {
+      setMessages((prev) => [
+        ...prev,
+        { id: Date.now().toString(), text: transcript, isUser: true },
+      ]);
 
-      const aiReply =
-        data?.candidates?.[0]?.content?.parts?.[0]?.text ||
-        data?.candidates?.[0]?.content?.text ||
-        "माफ़ करें, मैं आपकी मदद नहीं कर सका।";
+      const loadingId = `loading-${Date.now()}`;
+      setMessages((prev) => [
+        ...prev,
+        { id: loadingId, text: "सोच रहा हूँ...", isUser: false },
+      ]);
 
-      setMessages((prev) =>
-        prev
-          .filter((msg) => msg.id !== loadingId)
-          .concat({ id: Date.now().toString(), text: aiReply, isUser: false })
-      );
-    } catch (err) {
-      console.error("AI API Error:", err);
-      setMessages((prev) =>
-        prev
-          .filter((msg) => msg.id !== loadingId)
-          .concat({
-            id: Date.now().toString(),
-            text: "कुछ गलत हो गया। कृपया पुनः प्रयास करें।",
-            isUser: false,
-          })
-      );
-    } finally {
-      setIsListening(false);
+      try {
+        const aiReply = await callGenerativeAI(transcript);
+        
+        setMessages((prev) =>
+          prev
+            .filter((msg) => msg.id !== loadingId)
+            .concat({ id: Date.now().toString(), text: aiReply, isUser: false })
+        );
+      } catch (err) {
+        console.error("AI API Error:", err);
+        setMessages((prev) =>
+          prev
+            .filter((msg) => msg.id !== loadingId)
+            .concat({
+              id: Date.now().toString(),
+              text: "कुछ गलत हो गया। कृपया पुनः प्रयास करें।",
+              isUser: false,
+            })
+        );
+      } finally {
+        setIsListening(false);
+      }
     }
   };
 
@@ -231,21 +242,7 @@ export default function VoiceAssistant() {
       setIsListening(true);
       try {
         recognition.start();
-        recognition.onresult = (event: SpeechRecognitionEvent) => {
-          const last = event.results.length - 1;
-          const result = event.results[last];
-          const transcript = result[0].transcript;
-
-          console.log("Recognized:", transcript);
-
-          if (result.isFinal && transcript.trim()) {
-            setMessages((prev) => [
-              ...prev,
-              { id: Date.now().toString(), text: transcript, isUser: true },
-            ]);
-            callGenerativeAI(transcript);
-          }
-        };
+        recognition.onresult = handleSpeechResult;
       } catch (error) {
         console.error("Speech start error:", error);
         alert("Speech recognition शुरू करने में त्रुटि हुई। कृपया पुनः प्रयास करें।");
