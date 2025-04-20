@@ -33,7 +33,7 @@ export default function VoiceAssistant() {
 
   const isSecureContext =
     typeof window !== "undefined" &&
-    (window.location.protocol === "https:" ||
+    (window.location.protocol === "http:" ||
       window.location.hostname === "localhost");
 
   const requestMicrophonePermission = async () => {
